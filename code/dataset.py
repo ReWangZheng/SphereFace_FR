@@ -2,26 +2,38 @@ from tensorflow._api.v1.data import Dataset,Iterator
 import os
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from tensorflow.examples.tutorials.mnist import input_data
 
 def get_datainfo(LFW_dir):
     labels = os.listdir(LFW_dir)
     data_info = []
     data_label = []
-    for id,person_name in enumerate(labels):
+    id = 0
+    fg = False
+    for person_name in labels:
         person_data = os.path.join(LFW_dir,person_name)
         file_name = os.listdir(person_data)
-
+        if len(file_name)<100:
+            continue
         for fn in file_name:
             data_info.append(os.path.join(person_data,fn))
             data_label.append(id)
-    return (data_info,data_label)
+            if len(data_info) == 4000:
+                fg = True
+                break
+        if fg:
+            break
+        id +=1
+    print(id)
+    print(len(data_info))
+    return (data_info[:1100],data_label[:1100])
 class LFWHelper:
-    def __init__(self,LFW_dir = '/home/dataset/LFW/',size = (24,24,3)):
+    def __init__(self,LFW_dir = '/home/dataset/LFW/',size = (128,128,3),batch = 500):
         self.cls_num = 5749
         self.size = size
         self.FLW_dir = LFW_dir
         self.data_info = get_datainfo(self.FLW_dir)
-        self.dataset = Dataset.from_tensor_slices(self.data_info).map(self.load_img).shuffle(800).batch(150)
+        self.dataset = Dataset.from_tensor_slices(self.data_info).map(self.load_img).shuffle(800).batch(batch).repeat()
     def load_img(self,fp,label):
         img_file = tf.read_file(fp)
         #decode the binary data to image
