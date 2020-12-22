@@ -19,13 +19,13 @@ def max_pool(input_v,size,stride,mode="SAME"):
     return tf.nn.max_pool(input_v,size,stride,mode)
 
 # add conv layer
-def add_conv(inputs,name_scope,kernel_shape,activation=tf.nn.relu):
-    w,h,c_o,c_n = kernel_shape.shape
+def add_conv(inputs,kernel_shape,name_scope,activation=tf.nn.relu,s=1):
+    w,h,c_o,c_n = kernel_shape
     with tf.variable_scope(name_scope):
         w_conv = weight_variable(shape=[w, h, c_o, c_n],
                                        name="w")
         b_conv = bias_variable(shape=[c_n], name="b")
-        out = activation(conv2d(inputs, w_conv, stride=[1, 2, 2, 1]) + b_conv)
+        out = activation(conv2d(inputs, w_conv, stride=[1, s, s, 1]) + b_conv)
         return out
 def add_dense(inputs,units,name_scope,activation=None):
     with tf.variable_scope(name_scope):
@@ -39,18 +39,23 @@ def add_dense(inputs,units,name_scope,activation=None):
             return activation(out)
 
 # flatten layer
-def flatten(input_tensor,name):
+def add_flatten(input_tensor,name):
     shape_list = input_tensor.shape.as_list()
     n,w,h,c = shape_list
-    return tf.reshape(input_tensor,shape=[-1,w * h * c],name=name),[-1,w * h * c]
+    return tf.reshape(input_tensor,shape=[-1,w * h * c],name=name)
 
 def prelu(_x):
-    global  i
-    i+=1
-    alphas = tf.get_variable('alpha{}'.format(i), _x.get_shape()[-1],
+    # prelu.x is a global variable,set to prevent renaming
+    if not hasattr(prelu, 'x'):
+        prelu.x = 0
+    prelu.x+=1
+    # this variable can be used,when the x is negtive
+    alphas = tf.get_variable('alpha{}'.format(prelu.x), _x.get_shape()[-1],
                        initializer=tf.constant_initializer(0.0),
                         dtype=tf.float32)
+    # the first step is to directly caculate the value that was activated by relu
     pos = tf.nn.relu(_x)
+    # if x > 0,neg will be a zero.
     neg = alphas * (_x - abs(_x)) * 0.5
     return pos+neg
 

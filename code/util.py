@@ -24,5 +24,5 @@ class ModelHelper:
             return int(self.latest.split('-')[-1])
         return 0
     def save(self,cur_step):
-        if cur_step % self.every_step == 0:
+        if cur_step==0 or cur_step % self.every_step == 0:
             self.saver.save(self.sess,self.save_path,global_step=cur_step)

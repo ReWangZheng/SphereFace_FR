@@ -1,121 +1,1 @@
-import tensorflow as tf
-from layer import *
-from loss import *
-from dataset import LFWHelper
-from util import *
-import cv2
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets("/home/regan/code/deeplearn/SphereFace/MNIST_data/", one_hot=False, reshape=False)
-i=0
-class SphereFace:
-    def __init__(self,is_train=True,num_cls=10,save_path='../models/'):
-        self.graph = tf.Graph()
-        self.input_size = [28,28]
-        self.embedding_dim = 512
-        self.batch = 800
-        self.target_step = 7000
-        with self.graph.as_default():
-            self.log = SummaryUitil(scope="SphereFace")
-            self.helper = LFWHelper(batch=self.batch)
-            self.inputs = tf.placeholder(dtype=tf.float32,
-                                         shape=[self.batch, self.input_size[0],
-                                                self.input_size[1], 1])
-            self.target = tf.placeholder(dtype=tf.int64, shape=[self.batch])
-
-            with tf.variable_scope("sphereFace"):
-                # layer 1
-                self.w1_conv = weight_variable(shape=[3,3,1,64],
-                                               name="conv_w1")
-                self.b1_conv = bias_variable(shape=[64],name="bias1")
-
-                self.out_1 = prelu(conv2d(self.inputs,self.w1_conv,stride=[1,2,2,1]) + self.b1_conv)
-
-                # layer 2
-                self.w2_conv = weight_variable(shape=[3,3,64,64],
-                                                name="conv_w2"
-                                               )
-                self.b2_conv = bias_variable(shape=[64],name="bias2")
-
-                self.out_2 = prelu(conv2d(self.out_1,self.w2_conv,stride=[1,1,1,1]) + self.b2_conv)
-
-                # layer 3
-                self.w3_conv = weight_variable(shape=[3,3,64,128],
-                                                name="conv_w3"
-                                               )
-                self.b3_conv = bias_variable(shape=[128],name="bias3")
-
-                self.out_3 = prelu(conv2d(self.out_2,self.w3_conv,stride=[1,2,2,1]) + self.b3_conv)
-
-                # layer 4
-                self.w4_conv = weight_variable(shape=[3,3,128,128],
-                                                name="conv_w4",
-                                               )
-                self.b4_conv = bias_variable(shape=[128],name="bias4")
-
-                self.out_4 = prelu(conv2d(self.out_3,self.w4_conv,stride=[1,1,1,1]) + self.b4_conv)
-                # FC
-                self.fc,fc_shape = flatten(self.out_4,"fc4")
-                self.w5_fc = weight_variable(shape=[fc_shape[1],self.embedding_dim],name="w5_fc",layer_type="fallten")
-                self.b5_fc = bias_variable(shape=[self.embedding_dim],name="b5")
-                self.embedding = tf.matmul(self.fc,self.w5_fc)+self.b5_fc
-                if is_train:
-                    self.logits, self.loss = Loss_ASoftmax(self.embedding,self.target,1,num_cls=10,m=2)
-                    self.pred = tf.argmax(self.logits,axis=1)
-                    global_step = tf.Variable(0, trainable=False)
-                    decay_lr = tf.train.exponential_decay(0.01, global_step, 500, 0.9)
-                    self.add_step_op = tf.assign_add(global_step, tf.constant(1))
-                    self.trainer = tf.train.AdamOptimizer(decay_lr)
-                    self.train_opt = self.trainer.minimize(self.loss)
-                    self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.logits,axis=1),self.target),dtype=tf.float32))
-            self.sess = tf.Session()
-            self.saver = ModelHelper(save_path, self.sess)
-    def embed(self,image,resize=False):
-        x_in = np.empty(shape=[180,self.input_size[0],self.input_size[1],3])
-        for i in range(0,len(image)):
-            x_in[i] = cv2.resize(image[i],dsize=(self.input_size[0],self.input_size[1]))
-        if resize:
-            pass
-        with self.graph.as_default():
-            self.sess.run(tf.global_variables_initializer())
-            embed = self.sess.run(self.embedding,feed_dict={self.inputs:x_in})
-        return embed[:len(image)]
-    def train(self):
-        step = self.saver.reload()
-        with self.graph.as_default():
-            # x_train = x_train / 255.
-            # x_train, y_train = self.sess.run(data_train)
-            self.sess.run(tf.global_variables_initializer())
-            init_op, data_train = self.helper.get_iterator()
-            self.sess.run(init_op)
-            while 1:
-                batch_images, batch_labels = mnist.test.next_batch(self.batch)
-                self.sess.run([self.train_opt,self.add_step_op], feed_dict={self.inputs: batch_images, self.target: batch_labels})
-                if step % 10 == 0:
-                    loss_v,acc,p= self.sess.run([self.loss,self.accuracy,self.pred],feed_dict={self.inputs: batch_images, self.target: batch_labels})
-                    print("step {} , the loss value {},the accuracy {}".format(step,loss_v,acc))
-                # self.saver.save(step)
-                step +=1
-                if step == self.target_step:
-                    break
-def test_model():
-    face_model = SphereFace()
-    face_model.train()
-def FR():
-    import os
-    face1 = '../faces/Horst_Koehler'
-    face2 = '../faces/Ian_McKellen'
-    face1_img = []
-    face_model = SphereFace()
-    for filename in os.listdir(face1):
-        face1_img.append(plt.imread(os.path.join(face1,filename)))
-    face1_emb= face_model.embed(face1_img,resize=True)
-    print(face1_emb)
-
-    face2_img = []
-    for filename in os.listdir(face2):
-        face2_img.append(plt.imread(os.path.join(face2,filename)))
-    face2_emb= face_model.embed(face2_img,resize=True)
-    print(face2_emb)
-
-if __name__ == '__main__':
-    test_model()
+import tensorflow as tffrom layer import *from loss import *from dataset import LFWHelperfrom util import *from tqdm import tqdmimport sysimport cv2from tensorflow.examples.tutorials.mnist import input_datamnist = input_data.read_data_sets("/home/regan/code/deeplearn/SphereFace/MNIST_data/", one_hot=False, reshape=False)class SphereFace:    def __init__(self,batch = 100,is_train=True,num_cls=10,save_path='../models/'):        self.graph = tf.Graph()        self.input_size = [28,28,1]        self.embedding_dim = 2        self.batch = batch        self.target_step = 100        self.target_epoch = 400        with self.graph.as_default():            self.log = SummaryUitil(scope="SphereFace")            self.helper = LFWHelper(batch=self.batch)            self.inputs = tf.placeholder(dtype=tf.float32,                                         shape=[self.batch, self.input_size[0],                                                self.input_size[1], self.input_size[-1]])            self.target = tf.placeholder(dtype=tf.int64, shape=[self.batch])            with tf.variable_scope("sphereFace"):                # layer 1                self.out_1 = add_conv(self.inputs,[3,3,self.input_size[-1],64],'conv_layer_1',prelu,s=2)                # layer 2                self.out_2 = add_conv(self.out_1,[3,3,64,64],'conv_layer_2',prelu,s=1)                # layer 3                self.out_3 = add_conv(self.out_2,[3,3,64,128],'conv_layer_3',prelu,s=2)                # layer 4                self.out_4 = add_conv(self.out_3,[3,3,128,128],'conv_layer_4',prelu,s=1)                # FC                self.fc= add_flatten(self.out_4,"fc4")                self.embedding = add_dense(self.fc,self.embedding_dim,'dense_layer5')                if is_train:                    self.prob, self.loss = Asoftmax(self.embedding,self.target,0.5,10)                    self.global_step = tf.Variable(0, trainable=False)                    self.add_step_op = tf.assign_add(self.global_step, tf.constant(1))                    self.global_epoch = tf.Variable(1,trainable=False)                    self.add_epoch_op = tf.assign_add(self.global_epoch,tf.constant(1))                    decay_lr = tf.train.exponential_decay(0.01,self.global_step, 500, 0.9)                    self.train_opt = tf.train.AdamOptimizer(decay_lr).minimize(self.loss)                    self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.logits,axis=1),self.target),dtype=tf.float32))            self.sess = tf.Session()            self.saver = ModelHelper(save_path, self.sess)    def extract_feature(self,image,resize=False):        x_in = np.empty(shape=[len(image),*self.input_size])        if resize:            for i in range(0, len(image)):                x_in[i] = cv2.resize(image[i], dsize=(self.input_size[0], self.input_size[1]))        else:            x_in = image        self.batch = len(image)        with self.graph.as_default():            self.saver.reload()            return self.sess.run(self.embedding,feed_dict={self.inputs:x_in})    def train(self):        with self.graph.as_default():            self.sess.run(tf.global_variables_initializer())            self.saver.reload()            init_op, data_train = self.helper.get_iterator()            self.sess.run(init_op)            current_epoch = self.sess.run(self.global_epoch)            for epoch in range(current_epoch,self.target_epoch):                for step in tqdm(range(0,self.target_step),file=sys.stdout,unit=' step'):                    # batch_images, batch_labels = self.sess.run(data_train)                    batch_images, batch_labels = mnist.train.next_batch(self.batch)                    self.sess.run([self.train_opt,self.add_step_op], feed_dict={self.inputs: batch_images, self.target: batch_labels})                epoch,step,loss_v,acc= self.sess.run([self.add_epoch_op,self.global_step,self.loss,self.accuracy],feed_dict={self.inputs: batch_images, self.target: batch_labels})                print("epoch:{}---------------step:{} loss:{:.4f}  accuracy:{:.3f} \n".format(epoch,step,loss_v,acc))                self.saver.save(0)def train_model():    face_model = SphereFace()    face_model.train()def test_MNIST():    face_model = SphereFace(is_train=False,batch=1000)    x_test,y_test = mnist.test.next_batch(1000)    feature = face_model.extract_feature(x_test)    for i in range(0,10):        plt.scatter(feature[y_test==i][:,0],y=feature[y_test==i][:,1])    plt.show()if __name__ == '__main__':    test_MNIST()
